@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# Data & Warehouse
+warehouse.db
+data/
+output_*.csv
+
+# IDEs
+.vscode/
+.idea/
+.streamlit/
+
+# OS
+.DS_Store
+Thumbs.db
