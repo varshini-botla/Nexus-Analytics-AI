@@ -186,13 +186,13 @@ try:
             # HERO METRICS
             m1, m2, m3, m4 = st.columns(4)
             with m1:
-                st.metric("Total Revenue", f"${sales_val:,.0f}", "+12.5%")
+                st.metric("Total Revenue", f"${sales_val:,.0f}", f"{sales_val / orders_val:,.1f}/order" if orders_val > 0 else "0")
             with m2:
-                st.metric("Total Orders", f"{orders_val:,}", "+5.2%")
+                st.metric("Total Orders", f"{orders_val:,}", "Stable")
             with m3:
-                st.metric("Unique Customers", f"{cust_val:,}", "+8.1%")
+                st.metric("Unique Customers", f"{cust_val:,}", f"{orders_val / cust_val:,.1f} freq." if cust_val > 0 else "0")
             with m4:
-                st.metric("Sentiment Score", f"{score}%", "+2.4%")
+                st.metric("Avg Sentiment", f"{score}%", "Positive" if score > 70 else "Neutral")
 
             st.markdown("<br>", unsafe_allow_html=True)
 
@@ -203,22 +203,24 @@ try:
                 cat_df = pd.read_sql("SELECT dp.category, SUM(fs.sales) as s FROM fact_sales fs JOIN dim_product dp ON fs.product_id=dp.product_id GROUP BY dp.category", conn)
                 fig = px.bar(cat_df, x='category', y='s', color='category',
                              color_discrete_sequence=px.colors.sequential.Plasma_r,
-                             template="plotly_dark")
-                fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
+                             template="plotly_dark", barmode='group')
+                fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", showlegend=False,
+                                 yaxis_showgrid=False, xaxis_title="", yaxis_title="Revenue ($)")
                 st.plotly_chart(fig, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with col2:
                 st.markdown('<div class="nexus-card">', unsafe_allow_html=True)
-                st.subheader("Customer Segments")
+                st.subheader("Segment Insight")
                 seg_df = pd.read_sql("SELECT segment, COUNT(*) as counts FROM ml_customer_segments GROUP BY segment", conn)
                 if not seg_df.empty:
-                    fig2 = px.pie(seg_df, values='counts', names='segment', hole=0.6,
+                    fig2 = px.pie(seg_df, values='counts', names='segment', hole=0.7,
                                  color_discrete_sequence=['#6366f1', '#a855f7', '#22d3ee'])
-                    fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", showlegend=True)
+                    fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", showlegend=True,
+                                      legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
                     st.plotly_chart(fig2, use_container_width=True)
                 else:
-                    st.caption("No segments generated yet.")
+                    st.caption("Segments Offline: Run ETL")
                 st.markdown('</div>', unsafe_allow_html=True)
 
     elif page == "Predictive Suite":
@@ -228,21 +230,54 @@ try:
         if not conn:
             st.info("Upload data in Data Factory to see AI forecasts.")
         else:
-            st.markdown('<div class="nexus-card">', unsafe_allow_html=True)
-            st.subheader("30-Day Sales Projection")
-            forecast_df = pd.read_sql("SELECT * FROM ml_sales_forecast", conn)
-            if not forecast_df.empty:
-                forecast_df['date'] = pd.to_datetime(forecast_df['date'])
-                fig3 = go.Figure()
-                fig3.add_trace(go.Scatter(x=forecast_df['date'], y=forecast_df['predicted_sales'], 
-                                         mode='lines+markers', name='Predicted',
-                                         line=dict(color='#22d3ee', width=3)))
-                fig3.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                                 xaxis_title="Date", yaxis_title="Predicted Sales ($)")
-                st.plotly_chart(fig3, use_container_width=True)
-            else:
-                st.warning("Insufficient historical data for forecasting. Please process more sales records.")
-            st.markdown('</div>', unsafe_allow_html=True)
+            t1, t2 = st.tabs(["📉 30-Day Projection", "🧪 What-If Simulator"])
+            
+            with t1:
+                st.markdown('<div class="nexus-card">', unsafe_allow_html=True)
+                st.subheader("Sales Projection")
+                forecast_df = pd.read_sql("SELECT * FROM ml_sales_forecast", conn)
+                if not forecast_df.empty:
+                    forecast_df['date'] = pd.to_datetime(forecast_df['date'])
+                    fig3 = go.Figure()
+                    fig3.add_trace(go.Scatter(x=forecast_df['date'], y=forecast_df['predicted_sales'], 
+                                             mode='lines', name='Forecast', fill='tozeroy',
+                                             line=dict(color='#22d3ee', width=3)))
+                    fig3.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                                     xaxis_title="Timeline", yaxis_title="Revenue Prediction ($)",
+                                     margin=dict(l=0, r=0, t=20, b=0))
+                    st.plotly_chart(fig3, use_container_width=True)
+                else:
+                    st.warning("Nexus needs more historical data for accurate forecasting.")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with t2:
+                st.markdown('<div class="nexus-card">', unsafe_allow_html=True)
+                st.subheader("Scenario Simulator")
+                st.write("Adjust variables to simulate potential revenue impact.")
+                
+                col_s1, col_s2 = st.columns(2)
+                with col_s1:
+                    price_adj = st.slider("Price Adjustment (%)", -20, 20, 0)
+                    mkt_spend = st.slider("Marketing Boost (%)", 0, 100, 10)
+                
+                # Simple linear simulation logic
+                current_avg = sales_val / 30 # Daily avg
+                # elasticity approx -1.5, mkt response approx 0.2
+                sim_impact = ( (1 + (price_adj/100) * -1.5) * (1 + (mkt_spend/100) * 0.2) )
+                sim_revenue = sales_val * sim_impact
+                
+                with col_s2:
+                    st.markdown(f"""
+                    <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; border-left: 5px solid #22d3ee;">
+                        <h4 style="margin:0;">Projected Scenario Revenue</h4>
+                        <div style="font-size: 2.2rem; font-weight: 800; color: #22d3ee;">${sim_revenue:,.0f}</div>
+                        <div style="color: {'#10b981' if sim_impact >= 1 else '#ef4444'}; font-weight: 600;">
+                            {"+" if sim_impact >= 1 else ""}{(sim_impact - 1)*100:.1f}% vs Current
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
 
     elif page == "Data Factory":
         st.markdown('<div class="nexus-accent">Processing Unit</div>', unsafe_allow_html=True)
@@ -272,6 +307,17 @@ try:
                             st.error(f"ETL Failure: {e}")
         else:
             st.info("Drop a CSV, JSON, or TXT file to begin processing.")
+            if (DATA_DIR / "Sample - Superstore.csv").exists():
+                if st.button("♻️ Re-Process Local Buffer"):
+                     with st.spinner("Re-syncing Nexus Core..."):
+                        try:
+                            df_raw, o_raw, r_raw = extract(target_type="CSV")
+                            sales, prod, cust, o_df, r_df, agg, segments, forecast = transform(df_raw, o_raw, r_raw)
+                            load_to_dw(sales, prod, cust, o_df, r_df, agg, segments, forecast)
+                            st.success("Buffer Re-synced")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Sync Failure: {e}")
         st.markdown('</div>', unsafe_allow_html=True)
 
     elif page == "Core Warehouse":
