@@ -23,6 +23,7 @@ Nexus operates on a multi-layered Neural ETL pipeline, designed to handle the co
 
 ### 3. **Predictive Suite (The ML Engine)**
 *   **Temporal Forecasting**: Utilizes Exponential Smoothing (Holt-Winters) algorithms to project sales trends 30 days into the future.
+*   **Scenario Simulator**: An interactive "What-If" engine allowing stakeholders to simulate revenue based on price adjustments and marketing spent.
 *   **Customer Tiering**: Integrated K-Means clustering performs RFM (Recency, Frequency, Monetary) analysis to segment your audience into Platinum, Gold, and Silver tiers.
 *   **Advanced NLP**: Sentiment analysis powered by `TextBlob` to quantify customer satisfaction from raw review text.
 
